@@ -1,0 +1,2 @@
+[15:42:02] Log dir: log/hopper-medium-v2/11-02-24_15.42.02_usgx
+[15:42:06] Dataset returns have range [315.8680055141449, 3219.0092512369156]

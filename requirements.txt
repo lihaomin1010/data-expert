@@ -1,0 +1,9 @@
+numpy==1.24.4
+pandas==2.0.3
+tqdm==4.66.6
+Cython==0.29.37
+mujoco-py==2.1.2.14
+D4RL==1.1
+gym==0.23.1
+torch==2.4.1
+
