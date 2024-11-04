@@ -23,6 +23,7 @@ class RolloutBuffer:
     def __init__(self):
         self.actions = []
         self.states = []
+        self.next_states = []
         self.logprobs = []
         self.rewards = []
         self.state_values = []
@@ -35,6 +36,7 @@ class RolloutBuffer:
         del self.rewards[:]
         del self.state_values[:]
         del self.is_terminals[:]
+        del self.next_states[:]
 
 
 class ActorCritic(nn.Module):
@@ -124,11 +126,12 @@ class ActorCritic(nn.Module):
 
 
 class PPO:
-    def __init__(self, iql_policy, iql_clip, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip,
+    def __init__(self, iql_policy, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip,
                  has_continuous_action_space, action_std_init=0.6):
 
         self.iql_policy = iql_policy
-        self.iql_clip = iql_clip
+
+        #self.iql_clip = iql_clip
 
         self.has_continuous_action_space = has_continuous_action_space
 
@@ -203,19 +206,19 @@ class PPO:
 
             return action.item()
 
-    def accept_continue(self, old_state, state):
+    '''def accept_continue(self, old_state, state):
         state = torch.FloatTensor(state).to(device)
         old_state = torch.FloatTensor(old_state).to(device)
-        pred_v = self.iql_policy.nvf(old_state)
-        real_v = self.iql_policy.vf(state)
+        max_pred_v = self.max_iql_policy.nvf(old_state)
+        min_pred_v = self.min_iql_policy.nvf(old_state)
+        real_v = self.max_iql_policy.vf(state)
 
         # TODO: 探索
-        if (real_v > pred_v) or (real_v >= 0 and random() < real_v / pred_v / self.iql_clip) or (
-                pred_v < 0 and random() < pred_v / real_v / self.iql_clip):
+        if (max_pred_v < min_pred_v) or (real_v > max_pred_v) or (random() < (max_pred_v -real_v) / self.iql_clip / (max_pred_v - min_pred_v)):
             return True
-        return False
+        return False'''
 
-    def update(self):
+    def update(self, need_print):
         # Monte Carlo estimate of returns
         rewards = []
         discounted_reward = 0
@@ -229,14 +232,24 @@ class PPO:
         rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
+        new_states = torch.squeeze(torch.stack(self.buffer.next_states, dim=0).to(device))
+        intrinsic_reward = self.iql_policy.vf(new_states).detach()
+
         # convert list to tensor
         old_states = torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device)
         old_actions = torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device)
         old_logprobs = torch.squeeze(torch.stack(self.buffer.logprobs, dim=0)).detach().to(device)
         old_state_values = torch.squeeze(torch.stack(self.buffer.state_values, dim=0)).detach().to(device)
+        old_intrinsic_reward = self.iql_policy.nvf(old_states).detach()
 
         # calculate advantages
         advantages = rewards.detach() - old_state_values.detach()
+        intrinsic_adv = 1 - intrinsic_reward.detach() / old_intrinsic_reward.detach()
+        #if need_print:
+        #    print(advantages)
+        #    print(intrinsic_adv)
+        #    print('------------------------------')
+        #advantages += intrinsic_adv
 
         # Optimize policy for K epochs
         for _ in range(self.K_epochs):

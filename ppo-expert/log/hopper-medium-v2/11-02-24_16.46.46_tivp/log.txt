@@ -1,2 +1,0 @@
-[16:46:46] Log dir: log/hopper-medium-v2/11-02-24_16.46.46_tivp
-[16:46:50] Dataset returns have range [315.8680055141449, 3219.0092512369156]

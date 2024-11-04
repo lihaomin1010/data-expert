@@ -2,8 +2,10 @@ numpy==1.24.4
 pandas==2.0.3
 tqdm==4.66.6
 Cython==0.29.37
+dm_control==1.0.20
+mujoco==3.1.6
 mujoco-py==2.1.2.14
 D4RL==1.1
 gym==0.23.1
 torch==2.4.1
-
+tensorboard==2.12.0

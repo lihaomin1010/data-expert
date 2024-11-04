@@ -8,7 +8,7 @@ from tqdm import trange
 
 from src.iql import ImplicitQLearning
 from src.policy import GaussianPolicy, DeterministicPolicy
-from src.value_functions import TwinQ, ValueFunction
+from src.value_functions import TwinQ, ValueFunction, BoundValueFunction
 from src.util import return_range, set_seed, Log, sample_batch, torchify, evaluate_policy
 
 
@@ -103,5 +103,5 @@ if __name__ == '__main__':
     parser.add_argument('--n-eval-episodes', type=int, default=10)
     parser.add_argument('--max-episode-steps', type=int, default=1000)
     #parser.add_argument('--load-policy', type=str, default="")
-    parser.add_argument('--load-policy', type=str, default="log/hopper-medium-v2/demo/policy.pt")
+    parser.add_argument('--load-policy', type=str, default="")
     main(parser.parse_args())

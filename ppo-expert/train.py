@@ -5,6 +5,7 @@ import torch
 import numpy as np
 
 import gym
+from torch.utils.tensorboard import SummaryWriter# Create an instance of the object
 
 from ppo_algo import PPO
 import iql
@@ -138,9 +139,9 @@ def train(policy_load):
 
     ################# training procedure ################
 
-    iql_policy = iql.GetIql()
+    iql_policy = iql.GetIql(0.9, "iql-model/max-policy.pt")
     # initialize a PPO agent
-    ppo_agent = PPO(iql_policy, 0.7, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space,
+    ppo_agent = PPO(iql_policy, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space,
                     action_std)
     if policy_load:
         ppo_agent.load("model/policy.pth")
@@ -165,6 +166,8 @@ def train(policy_load):
     i_episode = 0
 
     # training loop
+    writer = SummaryWriter(log_dir="tb-log")
+
     while time_step <= max_training_timesteps:
 
         state = env.reset()
@@ -175,20 +178,25 @@ def train(policy_load):
             # select action with policy
             action = ppo_agent.select_action(state)
             state, reward, done, _ = env.step(action)
+            #env.render("human")
 
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
             ppo_agent.buffer.is_terminals.append(done)
+            ppo_agent.buffer.next_states.append(torch.tensor(state, dtype=torch.float32))
 
             time_step += 1
             current_ep_reward += reward
 
             # update PPO agent
-            if not ppo_agent.accept_continue(old_state, state):
-                ppo_agent.update()
-                break
-            elif time_step % update_timestep == 0:
-                ppo_agent.update()
+            #if not ppo_agent.accept_continue(old_state, state):
+            #    ppo_agent.update()
+            #    break
+            need_print = False
+            if time_step % print_freq == 0:
+                need_print = True
+            if time_step % (update_timestep//10) == 0:
+                ppo_agent.update(need_print)
 
             # if continuous action space; then decay action std of ouput action distribution
             if has_continuous_action_space and time_step % action_std_decay_freq == 0:
@@ -215,6 +223,7 @@ def train(policy_load):
                 print("Episode : {} \t\t Timestep : {} \t\t Average Reward : {}".format(i_episode, time_step,
                                                                                         print_avg_reward))
 
+                writer.add_scalar("reward/episode", print_avg_reward, i_episode)
                 print_running_reward = 0
                 print_running_episodes = 0
 
@@ -241,7 +250,7 @@ def train(policy_load):
 
     log_f.close()
     env.close()
-
+    writer.close()
     # print total training time
     print("============================================================================================")
     end_time = datetime.now().replace(microsecond=0)

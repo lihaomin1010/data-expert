@@ -51,7 +51,7 @@ class ImplicitQLearning(nn.Module):
 
         next_v_predict = self.nvf(observations)
         next_v_real = self.vf(next_observations).detach()
-        nv_loss = F.mse_loss(next_v_predict, next_v_real)
+        nv_loss = asymmetric_l2_loss(next_v_real-next_v_predict, self.tau)
         self.nv_optimizer.zero_grad(set_to_none=True)
         nv_loss.backward()
         self.nv_optimizer.step()
