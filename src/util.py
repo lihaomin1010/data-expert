@@ -86,12 +86,23 @@ def sample_batch(dataset, batch_size):
     return {k: v[indices] for k, v in dataset.items()}
 
 
+def sample_batch_online(dataset, batch_size):
+    k = list(dataset.keys())[0]
+    n = len(dataset[k])
+    device = torch.device('cuda')
+    for v in dataset.values():
+        assert len(v) == n, 'Dataset values must have same length'
+    indices = torch.randint(low=0, high=n, size=(batch_size,))
+    return {k: torch.Tensor(np.array(v)).to(device)[indices] for k, v in dataset.items()}
+
 def evaluate_policy(env, policy, max_episode_steps, deterministic=True):
     obs = env.reset()
     total_reward = 0.
+    step = 0
     for _ in range(max_episode_steps):
+        step += 1
         with torch.no_grad():
-            action = policy.act(torchify(obs), deterministic=deterministic).cpu().numpy()
+            action = policy.act(torchify(obs), deterministic=False).cpu().numpy()
         next_obs, reward, done, info = env.step(action)
         total_reward += reward
         if done:
@@ -99,7 +110,6 @@ def evaluate_policy(env, policy, max_episode_steps, deterministic=True):
         else:
             obs = next_obs
     return total_reward
-
 
 def set_seed(seed, env=None):
     torch.manual_seed(seed)
@@ -156,3 +166,31 @@ class Log:
         self.txt_file.close()
         if self.csv_file is not None:
             self.csv_file.close()
+
+
+def collect_traj(env, policy, max_episode_steps, buffer, deterministic=True):
+    obs = env.reset()
+    total_reward = 0.
+    for _ in range(max_episode_steps):
+        with torch.no_grad():
+            action = policy.act(torchify(obs), deterministic=deterministic).cpu().numpy()
+        next_obs, reward, done, info = env.step(action)
+        total_reward += reward
+        buffer.add_step(obs, action, reward, done, next_obs)
+        if done:
+            break
+        else:
+            obs = next_obs
+
+    return
+
+class RolloutBuffer:
+    def __init__(self):
+        self.dataset = {'actions': [], 'rewards': [], 'terminals': [], 'observations': [], 'next_observations': []}
+
+    def add_step(self, obs, action, reward, is_terminal, next_obs):
+        self.dataset['actions'].append(action)
+        self.dataset['rewards'].append(reward)
+        self.dataset['terminals'].append(is_terminal)
+        self.dataset['observations'].append(obs)
+        self.dataset['next_observations'].append(next_obs)

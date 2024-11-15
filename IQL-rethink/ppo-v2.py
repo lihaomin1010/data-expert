@@ -7,25 +7,28 @@ import numpy as np
 import gym
 
 from ppo_algo import PPO
+from ppo_imitate.iql import GetIql, get_env_and_dataset
+
+
 
 
 ################################### Training ###################################
-def train(policy_load):
+def train(args):
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######
-    env_name = "HalfCheetah-v2"
+    env_name = args.ppoenv_name
 
     has_continuous_action_space = True  # continuous action space; else discrete
 
     max_ep_len = 1000  # max timesteps in one episode
-    max_training_timesteps = int(1e7)  # break training loop if timeteps > max_training_timesteps
+    max_training_timesteps = int(3e6)  # break training loop if timeteps > max_training_timesteps
 
     print_freq = max_ep_len * 10  # print avg reward in the interval (in num timesteps)
     log_freq = max_ep_len * 2  # log avg reward in the interval (in num timesteps)
-    save_model_freq = int(1e5)  # save model frequency (in num timesteps)
+    save_model_freq = int(1e4)  # save model frequency (in num timesteps)
 
-    action_std = 0.001  # starting std for action distribution (Multivariate Normal)
+    action_std = 0.6  # starting std for action distribution (Multivariate Normal)
     action_std_decay_rate = 0.05  # linearly decay action_std (action_std = action_std - action_std_decay_rate)
     min_action_std = 0.1  # minimum action_std (stop decay after action_std <= min_action_std)
     action_std_decay_freq = int(2.5e5)  # action_std decay frequency (in num timesteps)
@@ -48,8 +51,8 @@ def train(policy_load):
 
     print("training environment name : " + env_name)
 
-    env = gym.make(env_name)
-
+    #env = gym.make(env_name)
+    env, dataset = get_env_and_dataset(None, args.env_name, 1000)
     # state space dimension
     state_dim = env.observation_space.shape[0]
 
@@ -89,11 +92,11 @@ def train(policy_load):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    directory = directory + '/' + env_name + '/' + f'{datetime.now().strftime("%y%m%d_%H%M%S")}' + '/'
+    directory = directory + '/' + env_name + '-ppov2/'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    checkpoint_path = directory + "PPO_{}_{}_{}".format(env_name, random_seed, run_num_pretrained)
+    checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     print("save checkpoint path : " + checkpoint_path)
     #####################################################
 
@@ -125,22 +128,24 @@ def train(policy_load):
     print("--------------------------------------------------------------------------------------------")
     print("optimizer learning rate actor : ", lr_actor)
     print("optimizer learning rate critic : ", lr_critic)
-    '''if random_seed:
+    if random_seed:
         print("--------------------------------------------------------------------------------------------")
         print("setting random seed to ", random_seed)
         torch.manual_seed(random_seed)
         env.seed(random_seed)
-        np.random.seed(random_seed)'''
+        np.random.seed(random_seed)
     #####################################################
 
     print("============================================================================================")
 
     ################# training procedure ################
 
+    iql_policy = GetIql(0.9, args.load_policy)
     # initialize a PPO agent
-    ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space, action_std)
-    if policy_load:
-        ppo_agent.load("PPO_preTrained/HalfCheetah-v2/241113_134645/PPO_HalfCheetah-v2_0_0-3000000.pth")
+    ppo_agent = PPO(iql_policy, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space,
+                    action_std)
+
+    ppo_agent.load("../PPO_preTrained/Halfcheetah-v2-ppov2/PPO_Halfcheetah-v2_0_0.pth")
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
     print("Started training at (GMT) : ", start_time)
@@ -162,6 +167,8 @@ def train(policy_load):
     i_episode = 0
 
     # training loop
+    p_rewards = []
+    total_reward = 0
     while time_step <= max_training_timesteps:
 
         state = env.reset()
@@ -171,8 +178,17 @@ def train(policy_load):
 
             # select action with policy
             action = ppo_agent.select_action(state)
+            #action = ppo_agent.iql_policy.policy.act(torch.Tensor(state).to(torch.device('cuda')))
             state, reward, done, _ = env.step(action)
+            #state, reward, done, _ = env.step(action.cpu().detach().numpy())
+            total_reward += reward
 
+            '''if done:
+                p_rewards.append(total_reward)
+                total_reward = 0
+                if len(p_rewards) == 10:
+                    print(f"average rewards {torch.mean(torch.Tensor(p_rewards))}")
+                    p_rewards = []'''
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
             ppo_agent.buffer.is_terminals.append(done)
@@ -186,8 +202,8 @@ def train(policy_load):
                 ppo_agent.update()
 
             # if continuous action space; then decay action std of ouput action distribution
-            if has_continuous_action_space and time_step % action_std_decay_freq == 0:
-                ppo_agent.decay_action_std(action_std_decay_rate, min_action_std)
+            #if has_continuous_action_space and time_step % action_std_decay_freq == 0:
+            #    ppo_agent.decay_action_std(action_std_decay_rate, min_action_std)
 
             # log in logging file
             if time_step % log_freq == 0:
@@ -216,9 +232,8 @@ def train(policy_load):
             # save model weights
             if time_step % save_model_freq == 0:
                 print("--------------------------------------------------------------------------------------------")
-
                 print("saving model at : " + checkpoint_path)
-                ppo_agent.save(f"{checkpoint_path}-{time_step}.pth")
+                ppo_agent.save(checkpoint_path)
                 print("model saved")
                 print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
                 print("--------------------------------------------------------------------------------------------")
@@ -248,6 +263,15 @@ def train(policy_load):
 
 
 if __name__ == '__main__':
-    train(policy_load=True)
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--ppoenv-name', default="")
+    parser.add_argument('--env-name', default="")
+    parser.add_argument('--load-policy', default="")
+    train(parser.parse_args())
+
+
+
+
 
 

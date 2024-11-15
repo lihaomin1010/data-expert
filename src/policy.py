@@ -26,10 +26,14 @@ class GaussianPolicy(nn.Module):
         # else:
         #     return MultivariateNormal(mean, scale_tril=scale_tril)
 
-    def act(self, obs, deterministic=False, enable_grad=False):
+    def act(self, obs, deterministic=True, enable_grad=False):
         with torch.set_grad_enabled(enable_grad):
             dist = self(obs)
             return dist.mean if deterministic else dist.sample()
+
+
+    def cal(self, obs):
+        return self.net(obs)
 
 
 class DeterministicPolicy(nn.Module):

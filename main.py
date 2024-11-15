@@ -16,13 +16,13 @@ def get_env_and_dataset(log, env_name, max_episode_steps):
     env = gym.make(env_name)
     dataset = d4rl.qlearning_dataset(env)
 
-    if any(s in env_name for s in ('halfcheetah', 'hopper', 'walker2d')):
+    '''if any(s in env_name for s in ('halfcheetah', 'hopper', 'walker2d')):
         min_ret, max_ret = return_range(dataset, max_episode_steps)
         log(f'Dataset returns have range [{min_ret}, {max_ret}]')
         dataset['rewards'] /= (max_ret - min_ret)
         dataset['rewards'] *= max_episode_steps
     elif 'antmaze' in env_name:
-        dataset['rewards'] -= 1.
+        dataset['rewards'] -= 1.'''
 
     for k, v in dataset.items():
         dataset[k] = torchify(v)
@@ -86,13 +86,13 @@ def main(args):
 if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--env-name', default="hopper-medium-v2")
+    parser.add_argument('--env-name', default="")
     parser.add_argument('--log-dir', default="./log")
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--discount', type=float, default=0.99)
     parser.add_argument('--hidden-dim', type=int, default=256)
     parser.add_argument('--n-hidden', type=int, default=2)
-    parser.add_argument('--n-steps', type=int, default=10**6)
+    parser.add_argument('--n-steps', type=int, default=1000000)
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--learning-rate', type=float, default=3e-4)
     parser.add_argument('--alpha', type=float, default=0.005)

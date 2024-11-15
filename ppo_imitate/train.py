@@ -7,25 +7,25 @@ import numpy as np
 import gym
 
 from ppo_algo import PPO
-
+import iql
 
 ################################### Training ###################################
 def train(policy_load):
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######
-    env_name = "HalfCheetah-v2"
+    env_name = "Walker2d-v2"
 
     has_continuous_action_space = True  # continuous action space; else discrete
 
     max_ep_len = 1000  # max timesteps in one episode
-    max_training_timesteps = int(1e7)  # break training loop if timeteps > max_training_timesteps
+    max_training_timesteps = int(3e6)  # break training loop if timeteps > max_training_timesteps
 
     print_freq = max_ep_len * 10  # print avg reward in the interval (in num timesteps)
     log_freq = max_ep_len * 2  # log avg reward in the interval (in num timesteps)
-    save_model_freq = int(1e5)  # save model frequency (in num timesteps)
+    save_model_freq = int(1e4)  # save model frequency (in num timesteps)
 
-    action_std = 0.001  # starting std for action distribution (Multivariate Normal)
+    action_std = 0.6  # starting std for action distribution (Multivariate Normal)
     action_std_decay_rate = 0.05  # linearly decay action_std (action_std = action_std - action_std_decay_rate)
     min_action_std = 0.1  # minimum action_std (stop decay after action_std <= min_action_std)
     action_std_decay_freq = int(2.5e5)  # action_std decay frequency (in num timesteps)
@@ -89,11 +89,11 @@ def train(policy_load):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    directory = directory + '/' + env_name + '/' + f'{datetime.now().strftime("%y%m%d_%H%M%S")}' + '/'
+    directory = directory + '/' + env_name + '/'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    checkpoint_path = directory + "PPO_{}_{}_{}".format(env_name, random_seed, run_num_pretrained)
+    checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     print("save checkpoint path : " + checkpoint_path)
     #####################################################
 
@@ -125,12 +125,12 @@ def train(policy_load):
     print("--------------------------------------------------------------------------------------------")
     print("optimizer learning rate actor : ", lr_actor)
     print("optimizer learning rate critic : ", lr_critic)
-    '''if random_seed:
+    if random_seed:
         print("--------------------------------------------------------------------------------------------")
         print("setting random seed to ", random_seed)
         torch.manual_seed(random_seed)
         env.seed(random_seed)
-        np.random.seed(random_seed)'''
+        np.random.seed(random_seed)
     #####################################################
 
     print("============================================================================================")
@@ -138,9 +138,11 @@ def train(policy_load):
     ################# training procedure ################
 
     # initialize a PPO agent
-    ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space, action_std)
+    iql_policy = iql.GetIql(0.9, "../log/walker2d-medium-v2/11-04-24_10.54.54_tdco/policy-final.pt")
+    ppo_agent = PPO(iql_policy, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space,
+                    action_std)
     if policy_load:
-        ppo_agent.load("PPO_preTrained/HalfCheetah-v2/241113_134645/PPO_HalfCheetah-v2_0_0-3000000.pth")
+        ppo_agent.load("model/policy.pth")
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
     print("Started training at (GMT) : ", start_time)
@@ -176,7 +178,6 @@ def train(policy_load):
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
             ppo_agent.buffer.is_terminals.append(done)
-            ppo_agent.buffer.next_states.append(state)
 
             time_step += 1
             current_ep_reward += reward
@@ -216,9 +217,8 @@ def train(policy_load):
             # save model weights
             if time_step % save_model_freq == 0:
                 print("--------------------------------------------------------------------------------------------")
-
                 print("saving model at : " + checkpoint_path)
-                ppo_agent.save(f"{checkpoint_path}-{time_step}.pth")
+                ppo_agent.save(checkpoint_path)
                 print("model saved")
                 print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
                 print("--------------------------------------------------------------------------------------------")
@@ -249,5 +249,9 @@ def train(policy_load):
 
 if __name__ == '__main__':
     train(policy_load=True)
+
+
+
+
 
 

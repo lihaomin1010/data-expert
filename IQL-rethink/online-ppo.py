@@ -7,14 +7,15 @@ import numpy as np
 import gym
 
 from ppo_algo import PPO
-import iql
+from ppo_imitate.iql import GetIql
+
 
 ################################### Training ###################################
-def train(policy_load):
+def train(args):
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######
-    env_name = "Hopper-v2"
+    env_name = args.ppoenv_name
 
     has_continuous_action_space = True  # continuous action space; else discrete
 
@@ -137,12 +138,10 @@ def train(policy_load):
 
     ################# training procedure ################
 
+    iql_policy = GetIql(0.9, args.load_policy)
     # initialize a PPO agent
-    iql_policy = iql.GetIql(0.9, "iql-model/max-policy.pt")
     ppo_agent = PPO(iql_policy, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space,
                     action_std)
-    if policy_load:
-        ppo_agent.load("model/policy.pth")
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
     print("Started training at (GMT) : ", start_time)
@@ -178,6 +177,7 @@ def train(policy_load):
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
             ppo_agent.buffer.is_terminals.append(done)
+            ppo_agent.buffer.next_states.append(state)
 
             time_step += 1
             current_ep_reward += reward
@@ -248,7 +248,12 @@ def train(policy_load):
 
 
 if __name__ == '__main__':
-    train(policy_load=False)
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--ppoenv-name', default="")
+    parser.add_argument('--env-name', default="")
+    parser.add_argument('--load-policy', default="")
+    train(parser.parse_args())
 
 
 

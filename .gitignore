@@ -1,2 +1,4 @@
 .idea/
 log/
+PPO_logs/
+PPO_preTrained/

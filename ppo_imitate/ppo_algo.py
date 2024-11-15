@@ -106,6 +106,20 @@ class ActorCritic(nn.Module):
 
         return action.detach(), action_logprob.detach(), state_val.detach()
 
+    def act_iql(self, state, action):
+        if self.has_continuous_action_space:
+            action_mean = self.actor(state)
+            cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
+            dist = MultivariateNormal(action_mean, cov_mat)
+        else:
+            action_probs = self.actor(state)
+            dist = Categorical(action_probs)
+
+        action_logprob = dist.log_prob(action)
+        state_val = self.critic(state)
+
+        return torch.unsqueeze(action, 0).detach(), action_logprob.detach(), state_val.detach()
+
     def evaluate(self, state, action):
 
         if self.has_continuous_action_space:
@@ -187,7 +201,8 @@ class PPO:
         if random() < 0.8:
             state = torch.FloatTensor(state).to(device)
             action = self.iql_policy.policy.act(state, deterministic=False).detach()
-            _, action_logprob, state_val = self.policy_old.act(state)
+
+            action, action_logprob, state_val = self.policy_old.act_iql(state, action)
             self.buffer.states.append(state)
             self.buffer.actions.append(action)
             self.buffer.logprobs.append(action_logprob)
